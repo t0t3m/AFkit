@@ -1,5 +1,5 @@
 obj-m = AFkit__rt.o
-CC = gcc
+CC = gcc -Wall
 PWD=$(shell pwd)
 
 all:

