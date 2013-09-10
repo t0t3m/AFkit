@@ -17,7 +17,7 @@ This anti-forensic rootkit uses the system call hijacking method, in particular 
 
 ### ToDo
 
-  1. Hide network communications
+  1. Hide network connections
   2. Hide network ports
   3. Hide process by given PID
 
