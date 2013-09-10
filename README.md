@@ -24,4 +24,4 @@ This anti-forensic rootkit uses the system call hijacking method, in particular 
 ## PLEASE REPORT BUGS. IT'LL BE VERY APPRECIATED!
 
 **Tested on ArchLinux Kernel 3.10.10 but it is supposed to work on all 3.x versions.**  
-**Beta quality product. I don't take any responsability about it's usage and it's behaviour**
+**Beta quality product. I don't take any responsability about its usage and its behaviour.**
