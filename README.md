@@ -15,8 +15,9 @@ This anti-forensic rootkit uses the system call hijacking method, in particular 
   * chdir
   * kill
 
-** UPDATE 19/04/2014**
-**Tested on ArchLinux with Kernel 3.14.1 (x86_64) and Debian Wheezy with kernel 3.12 (686)**  
+**UPDATE 19/04/2014** 
+
+**Tested on ArchLinux with Kernel 3.14.1 (x86_64) and Debian Wheezy with kernel 3.12 (686)**
 
 ### ToDo
 
