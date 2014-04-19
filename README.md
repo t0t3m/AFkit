@@ -15,6 +15,9 @@ This anti-forensic rootkit uses the system call hijacking method, in particular 
   * chdir
   * kill
 
+** UPDATE 19/04/2014**
+**Tested on ArchLinux with Kernel 3.14.1 (x86_64) and Debian Wheezy with kernel 3.12 (686)**  
+
 ### ToDo
 
   1. Hide network connections
@@ -23,5 +26,5 @@ This anti-forensic rootkit uses the system call hijacking method, in particular 
 
 ## PLEASE REPORT BUGS. IT'LL BE VERY APPRECIATED!
 
-**Tested on ArchLinux Kernel 3.10.10 but it is supposed to work on all 3.x versions.**  
+**Tested on ArchLinux Kernel 3.10.10 (x86_64) but it is supposed to work on all 3.x versions.**  
 **Beta quality product. I don't take any responsability about its usage and its behaviour.**
